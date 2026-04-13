@@ -1,30 +1,30 @@
 # Medium Daily Genie
 
-Protótipo em Python para ler emails do Gmail recebidos nos últimos 1 dia com assunto `Medium Daily Digest` e imprimir no terminal um Markdown com todos os links encontrados.
+Python prototype that reads Gmail emails received within the last 1 day from `Medium Daily Digest <noreply@medium.com>`, extracts the article links from the digest, prints a Markdown summary in the terminal, and sends the same report by email.
 
-## Estrutura
+## Structure
 
-- `main.py`: ponto de entrada do protótipo
-- `src/medium_daily_digest/services/`: autenticação Gmail, leitura dos emails e geração do relatório
-- `src/medium_daily_digest/utils/`: extração de links
-- `credentials/google_oauth_client.json` ou `client_secret_*.json` na raiz: credenciais OAuth do Google
-- `credentials/token.json`: token gerado localmente após a primeira autenticação
+- `main.py`: prototype entry point
+- `src/medium_daily_digest/services/`: Gmail authentication, email reading, report generation, and email sending
+- `src/medium_daily_digest/utils/`: link extraction helpers
+- `credentials/google_oauth_client.json` or a root-level `client_secret_*.json`: Google OAuth credentials
+- `credentials/token.json`: token generated locally after the first authentication
 
-## Como rodar
+## How to Run
 
-1. Ative a Gmail API em um projeto do Google Cloud.
-2. Crie um OAuth Client ID do tipo `Desktop app`.
-3. Baixe o JSON e salve em `credentials/google_oauth_client.json` ou deixe o arquivo `client_secret_*.json` na raiz do projeto.
-4. Instale as dependências:
+1. Enable the Gmail API in a Google Cloud project.
+2. Create an OAuth Client ID of type `Desktop app`.
+3. Download the JSON file and save it as `credentials/google_oauth_client.json`, or keep the `client_secret_*.json` file in the project root.
+4. Install dependencies:
 
 ```bash
 .venv/bin/pip install -r requirements.txt
 ```
 
-5. Execute:
+5. Run:
 
 ```bash
 .venv/bin/python main.py
 ```
 
-Na primeira execução, o navegador abrirá para autenticação da conta Google e um `token.json` será salvo localmente.
+On the first run, your browser will open for Google account authentication and a `token.json` file will be saved locally.
