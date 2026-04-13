@@ -11,7 +11,7 @@ class DigestLink:
 class DigestArticle:
     title: str
     medium_url: str
-    freedium_word_count: int | None
+    ai_summary: str | None
 
 
 @dataclass(frozen=True)

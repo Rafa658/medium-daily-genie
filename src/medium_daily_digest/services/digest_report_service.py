@@ -7,6 +7,7 @@ from html import unescape
 from src.medium_daily_digest.models import DigestArticle, DigestLink, DigestReport, EmailMessage
 from src.medium_daily_digest.services.freedium_service import FreediumService
 from src.medium_daily_digest.services.gmail_reader_service import GmailReaderService
+from src.medium_daily_digest.services.ollama_summary_service import OllamaSummaryService
 from src.medium_daily_digest.utils.link_extractor import (
     extract_digest_article_links_from_html,
     extract_links_from_html,
@@ -25,9 +26,11 @@ class DigestReportService:
         self,
         gmail_reader: GmailReaderService | None = None,
         freedium_service: FreediumService | None = None,
+        ollama_summary_service: OllamaSummaryService | None = None,
     ) -> None:
         self._gmail_reader = gmail_reader or GmailReaderService()
         self._freedium_service = freedium_service or FreediumService()
+        self._ollama_summary_service = ollama_summary_service or OllamaSummaryService()
 
     def build_report(self) -> DigestReport:
         email_messages = self._gmail_reader.list_recent_messages()
@@ -50,7 +53,7 @@ class DigestReportService:
         for article in articles:
             lines.append(f"## {article.title}")
             lines.append(f"[Link Medium]({article.medium_url})")
-            lines.append(self._build_freedium_markdown_line(article))
+            lines.append(self._build_summary_markdown(article))
             lines.append("")
 
         return "\n".join(lines).rstrip()
@@ -74,7 +77,7 @@ class DigestReportService:
                 f"<p style=\"margin: 0 0 6px 0;\"><a href=\"{escape(article.medium_url, quote=True)}\">"
                 "Link Medium"
                 "</a></p>"
-                f"<p style=\"margin: 0;\">{self._build_freedium_html_line(article)}</p>"
+                f"{self._build_summary_html(article)}"
                 "</section>"
             )
 
@@ -92,11 +95,14 @@ class DigestReportService:
     def _build_articles(self, email_messages: list[EmailMessage]) -> list[DigestArticle]:
         articles: list[DigestArticle] = []
         for link in self._extract_links_from_messages(email_messages):
+            article_html = self._freedium_service.get_article_html(link.url)
             articles.append(
                 DigestArticle(
                     title=link.title,
                     medium_url=link.url,
-                    freedium_word_count=self._freedium_service.get_html_word_count(link.url),
+                    ai_summary=self._ollama_summary_service.summarize_html(article_html)
+                    if article_html
+                    else None,
                 )
             )
 
@@ -159,12 +165,40 @@ class DigestReportService:
 
         return normalized_body[start_index:end_index].strip()
 
-    def _build_freedium_markdown_line(self, article: DigestArticle) -> str:
-        if article.freedium_word_count is None:
-            return "Link Freedium: indisponivel"
-        return f"Link Freedium: {article.freedium_word_count} palavras"
+    def _build_summary_markdown(self, article: DigestArticle) -> str:
+        if article.ai_summary is None:
+            return "_Resumo indisponivel no momento._"
+        return article.ai_summary
 
-    def _build_freedium_html_line(self, article: DigestArticle) -> str:
-        if article.freedium_word_count is None:
-            return "Link Freedium: indisponivel"
-        return f"Link Freedium: {article.freedium_word_count} palavras"
+    def _build_summary_html(self, article: DigestArticle) -> str:
+        if article.ai_summary is None:
+            return "<p style=\"margin: 0;\"><em>Resumo indisponivel no momento.</em></p>"
+
+        paragraphs = []
+        for block in article.ai_summary.split("\n\n"):
+            stripped_block = block.strip()
+            if not stripped_block:
+                continue
+
+            if stripped_block.startswith("## "):
+                heading = stripped_block[3:].strip()
+                paragraphs.append(f"<h3 style=\"margin: 16px 0 8px 0;\">{escape(heading)}</h3>")
+                continue
+
+            if stripped_block.startswith("**") and stripped_block.endswith("**"):
+                heading = stripped_block.strip("*").strip()
+                paragraphs.append(f"<h3 style=\"margin: 16px 0 8px 0;\">{escape(heading)}</h3>")
+                continue
+
+            if stripped_block.startswith("* "):
+                items = [
+                    f"<li>{escape(line[2:].strip())}</li>"
+                    for line in stripped_block.splitlines()
+                    if line.strip().startswith("* ")
+                ]
+                paragraphs.append(f"<ul style=\"margin: 8px 0 0 20px;\">{''.join(items)}</ul>")
+                continue
+
+            paragraphs.append(f"<p style=\"margin: 0 0 12px 0;\">{escape(stripped_block)}</p>")
+
+        return "".join(paragraphs)
