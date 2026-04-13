@@ -8,6 +8,13 @@ class DigestLink:
 
 
 @dataclass(frozen=True)
+class DigestArticle:
+    title: str
+    medium_url: str
+    freedium_word_count: int | None
+
+
+@dataclass(frozen=True)
 class EmailMessage:
     subject: str
     bodies: tuple[str, ...]

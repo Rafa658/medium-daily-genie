@@ -16,6 +16,8 @@ MEDIUM_FROM_DISPLAY = "Medium Daily Digest <noreply@medium.com>"
 REPORT_EMAIL_SUBJECT = "Resumo diário Medium"
 REPORT_EMAIL_RECIPIENT = "vrafagamer@gmail.com"
 REPORT_EMAIL_SENDER = "Medium Daily Genie <vrafagamer@gmail.com>"
+FREEDIUM_BASE_URL = "http://192.168.15.7:7080"
+FREEDIUM_TIMEOUT_SECONDS = 60
 
 
 def resolve_google_client_secret_file() -> Path:
