@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from html import escape
 from html import unescape
+import re
+import time
 
 from src.medium_daily_digest.models import DigestArticle, DigestLink, DigestReport, EmailMessage
 from src.medium_daily_digest.services.freedium_service import FreediumService
@@ -90,21 +92,27 @@ class DigestReportService:
 
     def _build_title(self) -> str:
         current_date = datetime.now().strftime("%d/%m/%Y")
-        return f"# Medum Daily Digest - Dia {current_date}"
+        return f"# Medium Daily Digest - Dia {current_date}"
 
     def _build_articles(self, email_messages: list[EmailMessage]) -> list[DigestArticle]:
         articles: list[DigestArticle] = []
         for link in self._extract_links_from_messages(email_messages):
+            start_time = time.perf_counter()
             article_html = self._freedium_service.get_article_html(link.url)
+            ai_summary = (
+                self._ollama_summary_service.summarize_html(article_html)
+                if article_html
+                else None
+            )
+            elapsed_seconds = time.perf_counter() - start_time
             articles.append(
                 DigestArticle(
                     title=link.title,
                     medium_url=link.url,
-                    ai_summary=self._ollama_summary_service.summarize_html(article_html)
-                    if article_html
-                    else None,
+                    ai_summary=ai_summary,
                 )
             )
+            print(f"Secao {link.title} finalizada - {elapsed_seconds:.2f} segundos")
 
         return articles
 
@@ -174,31 +182,77 @@ class DigestReportService:
         if article.ai_summary is None:
             return "<p style=\"margin: 0;\"><em>Resumo indisponivel no momento.</em></p>"
 
-        paragraphs = []
-        for block in article.ai_summary.split("\n\n"):
-            stripped_block = block.strip()
-            if not stripped_block:
+        blocks: list[str] = []
+        bullet_items: list[str] = []
+
+        for raw_line in article.ai_summary.splitlines():
+            line = raw_line.strip()
+
+            if not line:
+                if bullet_items:
+                    blocks.append(self._wrap_html_bullets(bullet_items))
+                    bullet_items = []
                 continue
 
-            if stripped_block.startswith("## "):
-                heading = stripped_block[3:].strip()
-                paragraphs.append(f"<h3 style=\"margin: 16px 0 8px 0;\">{escape(heading)}</h3>")
+            if line.startswith("## "):
+                if bullet_items:
+                    blocks.append(self._wrap_html_bullets(bullet_items))
+                    bullet_items = []
+                blocks.append(
+                    f"<h3 style=\"margin: 16px 0 8px 0;\">{self._render_inline_markdown(line[3:].strip())}</h3>"
+                )
                 continue
 
-            if stripped_block.startswith("**") and stripped_block.endswith("**"):
-                heading = stripped_block.strip("*").strip()
-                paragraphs.append(f"<h3 style=\"margin: 16px 0 8px 0;\">{escape(heading)}</h3>")
+            if line.startswith("### "):
+                if bullet_items:
+                    blocks.append(self._wrap_html_bullets(bullet_items))
+                    bullet_items = []
+                blocks.append(
+                    f"<h4 style=\"margin: 14px 0 8px 0;\">{self._render_inline_markdown(line[4:].strip())}</h4>"
+                )
                 continue
 
-            if stripped_block.startswith("* "):
-                items = [
-                    f"<li>{escape(line[2:].strip())}</li>"
-                    for line in stripped_block.splitlines()
-                    if line.strip().startswith("* ")
-                ]
-                paragraphs.append(f"<ul style=\"margin: 8px 0 0 20px;\">{''.join(items)}</ul>")
+            bullet_text = self._extract_bullet_text(line)
+            if bullet_text is not None:
+                bullet_items.append(bullet_text)
                 continue
 
-            paragraphs.append(f"<p style=\"margin: 0 0 12px 0;\">{escape(stripped_block)}</p>")
+            if bullet_items:
+                blocks.append(self._wrap_html_bullets(bullet_items))
+                bullet_items = []
 
-        return "".join(paragraphs)
+            blocks.append(
+                f"<p style=\"margin: 0 0 12px 0;\">{self._render_inline_markdown(line)}</p>"
+            )
+
+        if bullet_items:
+            blocks.append(self._wrap_html_bullets(bullet_items))
+
+        return "".join(blocks)
+
+    def _wrap_html_bullets(self, bullet_items: list[str]) -> str:
+        items = "".join(
+            f"<li>{self._render_inline_markdown(item)}</li>"
+            for item in bullet_items
+        )
+        return f"<ul style=\"margin: 8px 0 12px 20px;\">{items}</ul>"
+
+    def _extract_bullet_text(self, line: str) -> str | None:
+        bullet_match = re.match(r"^[*\-]\s+(.+?)\s*$", line)
+        if bullet_match:
+            return bullet_match.group(1).strip()
+        return None
+
+    def _render_inline_markdown(self, text: str) -> str:
+        rendered = escape(text)
+        rendered = re.sub(
+            r"\[([^\]]+)\]\(([^)]+)\)",
+            lambda match: (
+                f'<a href="{match.group(2)}">'
+                f"{match.group(1)}</a>"
+            ),
+            rendered,
+        )
+        rendered = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", rendered)
+        rendered = re.sub(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)", r"<em>\1</em>", rendered)
+        return rendered
