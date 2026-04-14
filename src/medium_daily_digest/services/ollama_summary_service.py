@@ -9,6 +9,8 @@ from urllib.request import Request, urlopen
 from src.medium_daily_digest.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    OLLAMA_TEMPERATURE,
+    OLLAMA_THINK,
     OLLAMA_TIMEOUT_SECONDS,
     SUMMARIZE_PROMPT_FILE,
 )
@@ -62,10 +64,31 @@ class OllamaSummaryService:
         if not article_text:
             return None
 
+        return self._generate_summary(article_text)
+
+    def _build_prompt(self, article_text: str) -> str:
+        return (
+            f"{self._prompt}\n\n"
+            "O texto abaixo foi extraido do HTML de um artigo do Medium.\n"
+            "Produza o resumo final seguindo rigorosamente as instrucoes acima.\n\n"
+            "Texto do artigo a resumir:\n"
+            f"{article_text}"
+        )
+
+    def _extract_text_from_html(self, html: str) -> str:
+        parser = _ArticleTextParser()
+        parser.feed(html)
+        return parser.extracted_text()
+
+    def _generate_summary(self, article_text: str) -> str | None:
         payload = {
             "model": OLLAMA_MODEL,
             "prompt": self._build_prompt(article_text),
             "stream": False,
+            "think": OLLAMA_THINK,
+            "options": {
+                "temperature": OLLAMA_TEMPERATURE,
+            },
         }
         request = Request(
             f"{OLLAMA_BASE_URL}/api/generate",
@@ -86,17 +109,3 @@ class OllamaSummaryService:
         summary = body.get("response", "")
         cleaned_summary = summary.strip()
         return cleaned_summary or None
-
-    def _build_prompt(self, article_text: str) -> str:
-        return (
-            f"{self._prompt}\n\n"
-            "O texto abaixo foi extraido do HTML de um artigo do Medium.\n"
-            "Produza o resumo final seguindo rigorosamente as instrucoes acima.\n\n"
-            "Texto do artigo a resumir:\n"
-            f"{article_text}"
-        )
-
-    def _extract_text_from_html(self, html: str) -> str:
-        parser = _ArticleTextParser()
-        parser.feed(html)
-        return parser.extracted_text()
