@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+.env
 
 client_secret_*.json
 credentials/google_oauth_client.json
