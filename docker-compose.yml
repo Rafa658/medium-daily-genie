@@ -1,0 +1,13 @@
+services:
+  medium-daily-genie:
+    build: .
+    container_name: medium-daily-genie
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: America/Sao_Paulo
+    ports:
+      - "6754:6754"
+    volumes:
+      - ./credentials:/app/credentials

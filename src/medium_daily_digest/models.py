@@ -24,3 +24,9 @@ class EmailMessage:
 class DigestReport:
     markdown: str
     html: str
+
+
+@dataclass(frozen=True)
+class DigestExecutionResult:
+    success: bool
+    output: str
