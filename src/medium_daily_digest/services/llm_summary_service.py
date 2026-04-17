@@ -7,11 +7,13 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from src.medium_daily_digest.config import (
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
-    OLLAMA_TEMPERATURE,
-    OLLAMA_THINK,
-    OLLAMA_TIMEOUT_SECONDS,
+    LLM_BASE_URL,
+    LLM_ENDPOINT_PATH,
+    LLM_MODEL,
+    LLM_RESPONSE_FIELD,
+    LLM_TEMPERATURE,
+    LLM_THINK,
+    LLM_TIMEOUT_SECONDS,
     SUMMARIZE_PROMPT_FILE,
 )
 
@@ -54,7 +56,7 @@ class _ArticleTextParser(HTMLParser):
         return "\n".join(compact_lines).strip()
 
 
-class OllamaSummaryService:
+class LlmSummaryService:
     def __init__(self, prompt_file: Path | None = None) -> None:
         self._prompt_file = prompt_file or SUMMARIZE_PROMPT_FILE
         self._prompt = self._prompt_file.read_text(encoding="utf-8").strip()
@@ -82,16 +84,18 @@ class OllamaSummaryService:
 
     def _generate_summary(self, article_text: str) -> str | None:
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": LLM_MODEL,
             "prompt": self._build_prompt(article_text),
             "stream": False,
-            "think": OLLAMA_THINK,
             "options": {
-                "temperature": OLLAMA_TEMPERATURE,
+                "temperature": LLM_TEMPERATURE,
             },
         }
+        if LLM_THINK:
+            payload["think"] = True
+
         request = Request(
-            f"{OLLAMA_BASE_URL}/api/generate",
+            self._build_request_url(),
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
@@ -101,11 +105,17 @@ class OllamaSummaryService:
         )
 
         try:
-            with urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
+            with urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
                 body = json.loads(response.read().decode("utf-8", errors="replace"))
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
             return None
 
-        summary = body.get("response", "")
+        summary = body.get(LLM_RESPONSE_FIELD, "")
+        if not isinstance(summary, str):
+            return None
+
         cleaned_summary = summary.strip()
         return cleaned_summary or None
+
+    def _build_request_url(self) -> str:
+        return f"{LLM_BASE_URL.rstrip('/')}/{LLM_ENDPOINT_PATH.lstrip('/')}"

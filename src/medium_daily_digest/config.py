@@ -26,6 +26,41 @@ def _get_env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
+def _get_env_int(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        return default
+
+
+def _get_env_float(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default
+
+
+def _get_env_bool(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized_value = raw_value.strip().lower()
+    if normalized_value in {"1", "true", "yes", "on"}:
+        return True
+    if normalized_value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 _load_dotenv()
 
 GMAIL_SCOPES = [
@@ -43,11 +78,13 @@ REPORT_EMAIL_SENDER = _get_env(
 )
 FREEDIUM_BASE_URL = _get_env("MEDIUM_DAILY_GENIE_FREEDIUM_BASE_URL", "http://127.0.0.1:7080")
 FREEDIUM_TIMEOUT_SECONDS = 60
-OLLAMA_BASE_URL = _get_env("MEDIUM_DAILY_GENIE_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = _get_env("MEDIUM_DAILY_GENIE_OLLAMA_MODEL", "gemma3:4b")
-OLLAMA_TIMEOUT_SECONDS = 180
-OLLAMA_THINK = False
-OLLAMA_TEMPERATURE = 0.1
+LLM_BASE_URL = _get_env("MDG_LLM_BASE_URL", "http://127.0.0.1:11434")
+LLM_MODEL = _get_env("MDG_LLM_MODEL", "gemma3:4b")
+LLM_ENDPOINT_PATH = _get_env("MDG_LLM_ENDPOINT_PATH", "/api/generate")
+LLM_RESPONSE_FIELD = _get_env("MDG_LLM_RESPONSE_FIELD", "response")
+LLM_TIMEOUT_SECONDS = _get_env_int("MDG_LLM_TIMEOUT_SECONDS", 180)
+LLM_THINK = _get_env_bool("MDG_LLM_THINK", False)
+LLM_TEMPERATURE = _get_env_float("MDG_LLM_TEMPERATURE", 0.1)
 SUMMARIZE_PROMPT_FILE = BASE_DIR / "summarize.md"
 
 

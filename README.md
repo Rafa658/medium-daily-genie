@@ -21,6 +21,18 @@ Python prototype that reads Gmail emails received within the last 1 day from `Me
 .venv/bin/pip install -r requirements.txt
 ```
 
+Optional environment variables for the LLM integration:
+
+```bash
+MDG_LLM_BASE_URL=http://127.0.0.1:11434
+MDG_LLM_MODEL=gemma3:4b
+MDG_LLM_ENDPOINT_PATH=/api/generate
+MDG_LLM_RESPONSE_FIELD=response
+MDG_LLM_TIMEOUT_SECONDS=180
+MDG_LLM_TEMPERATURE=0.1
+MDG_LLM_THINK=false
+```
+
 5. Run:
 
 ```bash

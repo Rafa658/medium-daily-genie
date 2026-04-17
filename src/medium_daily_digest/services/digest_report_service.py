@@ -9,7 +9,7 @@ import time
 from src.medium_daily_digest.models import DigestArticle, DigestLink, DigestReport, EmailMessage
 from src.medium_daily_digest.services.freedium_service import FreediumService
 from src.medium_daily_digest.services.gmail_reader_service import GmailReaderService
-from src.medium_daily_digest.services.ollama_summary_service import OllamaSummaryService
+from src.medium_daily_digest.services.llm_summary_service import LlmSummaryService
 from src.medium_daily_digest.utils.link_extractor import (
     extract_digest_article_links_from_html,
     extract_links_from_html,
@@ -28,11 +28,11 @@ class DigestReportService:
         self,
         gmail_reader: GmailReaderService | None = None,
         freedium_service: FreediumService | None = None,
-        ollama_summary_service: OllamaSummaryService | None = None,
+        llm_summary_service: LlmSummaryService | None = None,
     ) -> None:
         self._gmail_reader = gmail_reader or GmailReaderService()
         self._freedium_service = freedium_service or FreediumService()
-        self._ollama_summary_service = ollama_summary_service or OllamaSummaryService()
+        self._llm_summary_service = llm_summary_service or LlmSummaryService()
 
     def build_report(self) -> DigestReport:
         email_messages = self._gmail_reader.list_recent_messages()
@@ -100,7 +100,7 @@ class DigestReportService:
             start_time = time.perf_counter()
             article_html = self._freedium_service.get_article_html(link.url)
             ai_summary = (
-                self._ollama_summary_service.summarize_html(article_html)
+                self._llm_summary_service.summarize_html(article_html)
                 if article_html
                 else None
             )
