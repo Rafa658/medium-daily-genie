@@ -4,12 +4,15 @@ import json
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from src.medium_daily_digest.config import (
+    LLM_API_KEY,
     LLM_BASE_URL,
     LLM_ENDPOINT_PATH,
     LLM_MODEL,
+    LLM_PROVIDER,
     LLM_RESPONSE_FIELD,
     LLM_TEMPERATURE,
     LLM_THINK,
@@ -83,6 +86,12 @@ class LlmSummaryService:
         return parser.extracted_text()
 
     def _generate_summary(self, article_text: str) -> str | None:
+        if LLM_PROVIDER == "gemini":
+            return self._generate_gemini_summary(article_text)
+
+        return self._generate_generic_summary(article_text)
+
+    def _generate_generic_summary(self, article_text: str) -> str | None:
         payload = {
             "model": LLM_MODEL,
             "prompt": self._build_prompt(article_text),
@@ -117,5 +126,85 @@ class LlmSummaryService:
         cleaned_summary = summary.strip()
         return cleaned_summary or None
 
+    def _generate_gemini_summary(self, article_text: str) -> str | None:
+        if not LLM_API_KEY:
+            return None
+
+        payload = {
+            "systemInstruction": {
+                "parts": [{"text": self._prompt}],
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": self._build_gemini_user_content(article_text)}],
+                }
+            ],
+            "generationConfig": {
+                "temperature": LLM_TEMPERATURE,
+            },
+        }
+
+        request = Request(
+            self._build_gemini_request_url(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
+                body = json.loads(response.read().decode("utf-8", errors="replace"))
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+            return None
+
+        return self._extract_gemini_text(body)
+
+    def _build_gemini_user_content(self, article_text: str) -> str:
+        return (
+            "O texto abaixo foi extraido do HTML de um artigo do Medium.\n"
+            "Produza o resumo final seguindo rigorosamente as instrucoes de sistema.\n\n"
+            "Texto do artigo a resumir:\n"
+            f"{article_text}"
+        )
+
+    def _extract_gemini_text(self, body: dict[str, object]) -> str | None:
+        candidates = body.get("candidates")
+        if not isinstance(candidates, list) or not candidates:
+            return None
+
+        first_candidate = candidates[0]
+        if not isinstance(first_candidate, dict):
+            return None
+
+        content = first_candidate.get("content")
+        if not isinstance(content, dict):
+            return None
+
+        parts = content.get("parts")
+        if not isinstance(parts, list):
+            return None
+
+        text_parts: list[str] = []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            text = part.get("text")
+            if isinstance(text, str) and text.strip():
+                text_parts.append(text.strip())
+
+        if not text_parts:
+            return None
+
+        return "\n".join(text_parts).strip() or None
+
     def _build_request_url(self) -> str:
-        return f"{LLM_BASE_URL.rstrip('/')}/{LLM_ENDPOINT_PATH.lstrip('/')}"
+        endpoint_path = LLM_ENDPOINT_PATH.replace("{model}", LLM_MODEL)
+        return f"{LLM_BASE_URL.rstrip('/')}/{endpoint_path.lstrip('/')}"
+
+    def _build_gemini_request_url(self) -> str:
+        query = urlencode({"key": LLM_API_KEY})
+        return f"{self._build_request_url()}?{query}"
