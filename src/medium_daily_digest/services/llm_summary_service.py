@@ -64,10 +64,12 @@ class LlmSummaryService:
         self._prompt_file = prompt_file or SUMMARIZE_PROMPT_FILE
         self._prompt = self._prompt_file.read_text(encoding="utf-8").strip()
 
-    def summarize_html(self, html: str) -> str | None:
+    def summarize_html(self, html: str) -> str:
         article_text = self._extract_text_from_html(html)
         if not article_text:
-            return None
+            error_message = "ERRO LLM: nao foi possivel extrair texto legivel do HTML do artigo."
+            print(error_message)
+            return error_message
 
         return self._generate_summary(article_text)
 
@@ -85,13 +87,13 @@ class LlmSummaryService:
         parser.feed(html)
         return parser.extracted_text()
 
-    def _generate_summary(self, article_text: str) -> str | None:
+    def _generate_summary(self, article_text: str) -> str:
         if LLM_PROVIDER == "gemini":
             return self._generate_gemini_summary(article_text)
 
         return self._generate_generic_summary(article_text)
 
-    def _generate_generic_summary(self, article_text: str) -> str | None:
+    def _generate_generic_summary(self, article_text: str) -> str:
         payload = {
             "model": LLM_MODEL,
             "prompt": self._build_prompt(article_text),
@@ -116,19 +118,39 @@ class LlmSummaryService:
         try:
             with urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
                 body = json.loads(response.read().decode("utf-8", errors="replace"))
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
-            return None
+        except HTTPError as exc:
+            return self._http_error_message("LLM", exc)
+        except URLError as exc:
+            return self._network_error_message("LLM", exc)
+        except TimeoutError:
+            return self._timeout_error_message("LLM")
+        except json.JSONDecodeError as exc:
+            error_message = f"ERRO LLM: resposta da API nao veio em JSON valido. Detalhe: {exc}"
+            print(error_message)
+            return error_message
 
         summary = body.get(LLM_RESPONSE_FIELD, "")
         if not isinstance(summary, str):
-            return None
+            error_message = (
+                "ERRO LLM: resposta da API nao contem o campo de texto esperado "
+                f"('{LLM_RESPONSE_FIELD}')."
+            )
+            print(error_message)
+            return error_message
 
         cleaned_summary = summary.strip()
-        return cleaned_summary or None
+        if cleaned_summary:
+            return cleaned_summary
 
-    def _generate_gemini_summary(self, article_text: str) -> str | None:
+        error_message = "ERRO LLM: a resposta da API veio vazia."
+        print(error_message)
+        return error_message
+
+    def _generate_gemini_summary(self, article_text: str) -> str:
         if not LLM_API_KEY:
-            return None
+            error_message = "ERRO GEMINI: chave de API ausente. Defina MDG_LLM_API_KEY no ambiente."
+            print(error_message)
+            return error_message
 
         payload = {
             "systemInstruction": {
@@ -158,8 +180,16 @@ class LlmSummaryService:
         try:
             with urlopen(request, timeout=LLM_TIMEOUT_SECONDS) as response:
                 body = json.loads(response.read().decode("utf-8", errors="replace"))
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
-            return None
+        except HTTPError as exc:
+            return self._http_error_message("GEMINI", exc)
+        except URLError as exc:
+            return self._network_error_message("GEMINI", exc)
+        except TimeoutError:
+            return self._timeout_error_message("GEMINI")
+        except json.JSONDecodeError as exc:
+            error_message = f"ERRO GEMINI: resposta da API nao veio em JSON valido. Detalhe: {exc}"
+            print(error_message)
+            return error_message
 
         return self._extract_gemini_text(body)
 
@@ -171,22 +201,30 @@ class LlmSummaryService:
             f"{article_text}"
         )
 
-    def _extract_gemini_text(self, body: dict[str, object]) -> str | None:
+    def _extract_gemini_text(self, body: dict[str, object]) -> str:
         candidates = body.get("candidates")
         if not isinstance(candidates, list) or not candidates:
-            return None
+            error_message = self._gemini_response_error_message(body)
+            print(error_message)
+            return error_message
 
         first_candidate = candidates[0]
         if not isinstance(first_candidate, dict):
-            return None
+            error_message = "ERRO GEMINI: resposta da LLM veio em formato inesperado (candidate invalido)."
+            print(error_message)
+            return error_message
 
         content = first_candidate.get("content")
         if not isinstance(content, dict):
-            return None
+            error_message = "ERRO GEMINI: resposta da LLM nao contem content no formato esperado."
+            print(error_message)
+            return error_message
 
         parts = content.get("parts")
         if not isinstance(parts, list):
-            return None
+            error_message = "ERRO GEMINI: resposta da LLM nao contem parts no formato esperado."
+            print(error_message)
+            return error_message
 
         text_parts: list[str] = []
         for part in parts:
@@ -197,9 +235,17 @@ class LlmSummaryService:
                 text_parts.append(text.strip())
 
         if not text_parts:
-            return None
+            error_message = self._gemini_response_error_message(body)
+            print(error_message)
+            return error_message
 
-        return "\n".join(text_parts).strip() or None
+        cleaned_summary = "\n".join(text_parts).strip()
+        if cleaned_summary:
+            return cleaned_summary
+
+        error_message = "ERRO GEMINI: resposta da LLM veio vazia."
+        print(error_message)
+        return error_message
 
     def _build_request_url(self) -> str:
         endpoint_path = LLM_ENDPOINT_PATH.replace("{model}", LLM_MODEL)
@@ -208,3 +254,38 @@ class LlmSummaryService:
     def _build_gemini_request_url(self) -> str:
         query = urlencode({"key": LLM_API_KEY})
         return f"{self._build_request_url()}?{query}"
+
+    def _http_error_message(self, provider_name: str, exc: HTTPError) -> str:
+        detail = exc.reason
+        try:
+            response_body = exc.read().decode("utf-8", errors="replace").strip()
+            if response_body:
+                detail = response_body
+        except Exception:
+            pass
+
+        error_message = (
+            f"ERRO {provider_name}: requisicao rejeitada pela API "
+            f"(HTTP {exc.code}). Detalhe: {detail}"
+        )
+        print(error_message)
+        return error_message
+
+    def _network_error_message(self, provider_name: str, exc: URLError) -> str:
+        error_message = f"ERRO {provider_name}: falha de rede ao chamar a API. Detalhe: {exc.reason}"
+        print(error_message)
+        return error_message
+
+    def _timeout_error_message(self, provider_name: str) -> str:
+        error_message = f"ERRO {provider_name}: timeout ao aguardar resposta da API."
+        print(error_message)
+        return error_message
+
+    def _gemini_response_error_message(self, body: dict[str, object]) -> str:
+        prompt_feedback = body.get("promptFeedback")
+        if isinstance(prompt_feedback, dict):
+            block_reason = prompt_feedback.get("blockReason")
+            if isinstance(block_reason, str) and block_reason:
+                return f"ERRO GEMINI: resposta bloqueada pela API. Motivo: {block_reason}"
+
+        return "ERRO GEMINI: resposta da LLM nao contem texto resumido no formato esperado."

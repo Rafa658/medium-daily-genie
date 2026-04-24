@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -21,7 +22,10 @@ class GmailAuthService:
             credentials = None
 
         if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
+            try:
+                credentials.refresh(Request())
+            except RefreshError as exc:
+                raise RuntimeError(self._invalid_token_message()) from exc
             self._persist_credentials(credentials)
             return credentials
 
@@ -56,4 +60,11 @@ class GmailAuthService:
             f"Esperado em: {credentials_path}\n"
             "Crie um OAuth Client ID do tipo Desktop App no Google Cloud Console, "
             "ative a Gmail API e salve o JSON nesse caminho."
+        )
+
+    @staticmethod
+    def _invalid_token_message() -> str:
+        return (
+            "ERRO GMAIL: token OAuth invalido, expirado ou revogado.\n"
+            f"Remova o arquivo {GOOGLE_TOKEN_FILE} e autentique novamente para gerar um novo token."
         )
