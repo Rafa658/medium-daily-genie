@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from src.medium_daily_digest.config import (
+    REPORT_EMAIL_CC,
     REPORT_EMAIL_RECIPIENT,
     REPORT_EMAIL_SENDER,
     REPORT_EMAIL_SUBJECT,
@@ -25,6 +26,8 @@ class GmailSenderService:
             message["To"] = REPORT_EMAIL_RECIPIENT
             message["From"] = REPORT_EMAIL_SENDER
             message["Subject"] = REPORT_EMAIL_SUBJECT
+            if REPORT_EMAIL_CC:
+                message["Cc"] = ", ".join(REPORT_EMAIL_CC)
             message.set_content(markdown)
             message.add_alternative(html, subtype="html")
 
