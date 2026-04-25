@@ -99,11 +99,11 @@ class DigestReportService:
         for link in self._extract_links_from_messages(email_messages):
             start_time = time.perf_counter()
             article_html = self._freedium_service.get_article_html(link.url)
-            ai_summary = (
-                self._llm_summary_service.summarize_html(article_html)
-                if article_html
-                else None
-            )
+            if article_html:
+                ai_summary = self._llm_summary_service.summarize_html(article_html)
+            else:
+                ai_summary = "ERRO FREEDIUM: nao foi possivel obter o HTML do artigo."
+                print(f"{ai_summary} Link: {link.url}")
             elapsed_seconds = time.perf_counter() - start_time
             articles.append(
                 DigestArticle(
@@ -174,14 +174,9 @@ class DigestReportService:
         return normalized_body[start_index:end_index].strip()
 
     def _build_summary_markdown(self, article: DigestArticle) -> str:
-        if article.ai_summary is None:
-            return "_Resumo indisponivel no momento._"
         return article.ai_summary
 
     def _build_summary_html(self, article: DigestArticle) -> str:
-        if article.ai_summary is None:
-            return "<p style=\"margin: 0;\"><em>Resumo indisponivel no momento.</em></p>"
-
         blocks: list[str] = []
         bullet_items: list[str] = []
 

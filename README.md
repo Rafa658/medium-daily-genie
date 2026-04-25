@@ -24,14 +24,18 @@ Python prototype that reads Gmail emails received within the last 1 day from `Me
 Optional environment variables for the LLM integration:
 
 ```bash
-MDG_LLM_BASE_URL=http://127.0.0.1:11434
-MDG_LLM_MODEL=gemma3:4b
-MDG_LLM_ENDPOINT_PATH=/api/generate
+MDG_LLM_PROVIDER=gemini
+MDG_LLM_BASE_URL=https://generativelanguage.googleapis.com
+MDG_LLM_MODEL=gemini-3-flash-preview
+MDG_LLM_ENDPOINT_PATH=/v1beta/models/{model}:generateContent
+MDG_LLM_API_KEY=12345
 MDG_LLM_RESPONSE_FIELD=response
 MDG_LLM_TIMEOUT_SECONDS=180
-MDG_LLM_TEMPERATURE=0.1
+MDG_LLM_TEMPERATURE=1.0
 MDG_LLM_THINK=false
 ```
+
+For Gemini, the request is sent to `models/{model}:generateContent` and the API key is passed explicitly through `MDG_LLM_API_KEY`. Replace the placeholder key before running against the real API.
 
 5. Run:
 

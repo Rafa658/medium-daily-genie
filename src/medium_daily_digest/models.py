@@ -11,7 +11,7 @@ class DigestLink:
 class DigestArticle:
     title: str
     medium_url: str
-    ai_summary: str | None
+    ai_summary: str
 
 
 @dataclass(frozen=True)

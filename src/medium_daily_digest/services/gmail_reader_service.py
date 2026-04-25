@@ -5,6 +5,7 @@ from email.header import decode_header, make_header
 from typing import Any
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from src.medium_daily_digest.config import (
     LOOKBACK_DAYS,
@@ -20,28 +21,33 @@ class GmailReaderService:
         self._auth_service = auth_service or GmailAuthService()
 
     def list_recent_messages(self) -> list[EmailMessage]:
-        service = build("gmail", "v1", credentials=self._auth_service.get_credentials())
-        query = f"newer_than:{LOOKBACK_DAYS}d from:{MEDIUM_FROM_EMAIL}"
-        messages = self._list_all_messages(service, query)
+        try:
+            service = build("gmail", "v1", credentials=self._auth_service.get_credentials())
+            query = f"newer_than:{LOOKBACK_DAYS}d from:{MEDIUM_FROM_EMAIL}"
+            messages = self._list_all_messages(service, query)
 
-        email_messages: list[EmailMessage] = []
-        for message in messages:
-            payload = (
-                service.users()
-                .messages()
-                .get(userId="me", id=message["id"], format="full")
-                .execute()
-            )
+            email_messages: list[EmailMessage] = []
+            for message in messages:
+                payload = (
+                    service.users()
+                    .messages()
+                    .get(userId="me", id=message["id"], format="full")
+                    .execute()
+                )
 
-            sender = self._extract_header(payload, "from")
-            if not self._is_medium_sender(sender):
-                continue
+                sender = self._extract_header(payload, "from")
+                if not self._is_medium_sender(sender):
+                    continue
 
-            subject = self._extract_subject(payload)
-            bodies = tuple(self._extract_message_bodies(payload))
-            email_messages.append(EmailMessage(subject=subject or "(Sem assunto)", bodies=bodies))
+                subject = self._extract_subject(payload)
+                bodies = tuple(self._extract_message_bodies(payload))
+                email_messages.append(EmailMessage(subject=subject or "(Sem assunto)", bodies=bodies))
 
-        return email_messages
+            return email_messages
+        except RuntimeError:
+            raise
+        except HttpError as exc:
+            raise RuntimeError(f"ERRO GMAIL: falha ao consultar a API do Gmail. Detalhe: {exc}") from exc
 
     def _list_all_messages(self, service: Any, query: str) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []

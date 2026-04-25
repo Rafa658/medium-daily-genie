@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stdout
 from io import StringIO
+import traceback
 
 from src.medium_daily_digest.models import DigestExecutionResult
 from src.medium_daily_digest.services.digest_report_service import DigestReportService
@@ -29,6 +30,10 @@ class DigestExecutionService:
             except RuntimeError as exc:
                 success = False
                 print(f"Erro ao executar o prototipo:\n{exc}")
+            except Exception:
+                success = False
+                print("Erro inesperado ao executar o prototipo:")
+                print(traceback.format_exc())
 
         output = buffer.getvalue()
         print(output, end="")

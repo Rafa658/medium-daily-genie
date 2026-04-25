@@ -61,6 +61,19 @@ def _get_env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _get_env_list(name: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    values = tuple(
+        item.strip()
+        for item in raw_value.split(",")
+        if item.strip()
+    )
+    return values or default
+
+
 _load_dotenv()
 
 GMAIL_SCOPES = [
@@ -76,11 +89,17 @@ REPORT_EMAIL_SENDER = _get_env(
     "MEDIUM_DAILY_GENIE_REPORT_EMAIL_SENDER",
     "Medium Daily Genie <placeholder@example.com>",
 )
+REPORT_EMAIL_CC = _get_env_list(
+    "MEDIUM_DAILY_GENIE_REPORT_EMAIL_CC",
+    (),
+)
 FREEDIUM_BASE_URL = _get_env("MEDIUM_DAILY_GENIE_FREEDIUM_BASE_URL", "http://127.0.0.1:7080")
 FREEDIUM_TIMEOUT_SECONDS = 60
+LLM_PROVIDER = _get_env("MDG_LLM_PROVIDER", "ollama")
 LLM_BASE_URL = _get_env("MDG_LLM_BASE_URL", "http://127.0.0.1:11434")
 LLM_MODEL = _get_env("MDG_LLM_MODEL", "gemma3:4b")
 LLM_ENDPOINT_PATH = _get_env("MDG_LLM_ENDPOINT_PATH", "/api/generate")
+LLM_API_KEY = _get_env("MDG_LLM_API_KEY", "")
 LLM_RESPONSE_FIELD = _get_env("MDG_LLM_RESPONSE_FIELD", "response")
 LLM_TIMEOUT_SECONDS = _get_env_int("MDG_LLM_TIMEOUT_SECONDS", 180)
 LLM_THINK = _get_env_bool("MDG_LLM_THINK", False)
