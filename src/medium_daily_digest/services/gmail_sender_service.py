@@ -23,7 +23,7 @@ class GmailSenderService:
         try:
             service = build("gmail", "v1", credentials=self._auth_service.get_credentials())
             message = EmailMessage()
-            message["To"] = REPORT_EMAIL_RECIPIENT
+            message["To"] = ", ".join(REPORT_EMAIL_RECIPIENT)
             message["From"] = REPORT_EMAIL_SENDER
             message["Subject"] = REPORT_EMAIL_SUBJECT
             if REPORT_EMAIL_CC:

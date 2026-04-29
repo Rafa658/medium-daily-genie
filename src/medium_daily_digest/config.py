@@ -84,7 +84,7 @@ LOOKBACK_DAYS = 1
 MEDIUM_FROM_EMAIL = "noreply@medium.com"
 MEDIUM_FROM_DISPLAY = "Medium Daily Digest <noreply@medium.com>"
 REPORT_EMAIL_SUBJECT = "Resumo diário Medium"
-REPORT_EMAIL_RECIPIENT = _get_env("MEDIUM_DAILY_GENIE_REPORT_EMAIL_RECIPIENT", "placeholder@example.com")
+REPORT_EMAIL_RECIPIENT = _get_env_list("MEDIUM_DAILY_GENIE_REPORT_EMAIL_RECIPIENT", ("placeholder@example.com",))
 REPORT_EMAIL_SENDER = _get_env(
     "MEDIUM_DAILY_GENIE_REPORT_EMAIL_SENDER",
     "Medium Daily Genie <placeholder@example.com>",
