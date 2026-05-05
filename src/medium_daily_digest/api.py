@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from threading import Thread
 from uuid import uuid4
 
+from loguru import logger
+
 from src.medium_daily_digest.services.digest_execution_service import DigestExecutionService
 from src.medium_daily_digest.services.digest_preflight_service import DigestPreflightService
 from src.medium_daily_digest.services.digest_run_store import DigestRunStore
@@ -24,57 +26,68 @@ def health() -> JSONResponse:
 @app.post("/run_digest")
 def run_digest() -> JSONResponse:
     started_at = datetime.now().astimezone().isoformat()
-    active_job = run_store.get_active_job()
-    if active_job is not None and active_job.get("status") in {"pending", "running"}:
-        return JSONResponse(
-            _build_conflict_response(active_job),
-            status_code=409,
-        )
+    try:
+        active_job = run_store.get_active_job()
+        if active_job is not None and active_job.get("status") in {"pending", "running"}:
+            return JSONResponse(
+                _build_conflict_response(active_job),
+                status_code=409,
+            )
 
-    request_id = f"{started_at}__{uuid4().hex[:6]}"
-    services = DigestPreflightService().run_checks()
-    has_preflight_errors = any(
-        service["status"] == "error"
-        for service in services.values()
-    )
-    if has_preflight_errors:
+        request_id = f"{started_at}__{uuid4().hex[:6]}"
+        logger.info(f"[{request_id}] Iniciando rotina de run_digest")
+        
+        services = DigestPreflightService().run_checks()
+        has_preflight_errors = any(
+            service["status"] == "error"
+            for service in services.values()
+        )
+        if has_preflight_errors:
+            logger.error(f"[{request_id}] Falha no preflight check! Status dos servicos: {services}")
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "Falha ao iniciar o digest.",
+                    "request_id": request_id,
+                    "started_at": started_at,
+                    "services": services,
+                    "execution": {
+                        "mode": "async",
+                        "accepted": False,
+                    },
+                },
+                status_code=500,
+            )
+
+        run_store.create_job(request_id, started_at, services)
+        logger.info(f"[{request_id}] Preflight OK. Iniciando thread de execucao em background")
+        thread = Thread(
+            target=_execute_digest_job,
+            args=(request_id, services),
+            daemon=True,
+        )
+        thread.start()
+
         return JSONResponse(
             {
-                "status": "error",
-                "message": "Falha ao iniciar o digest.",
+                "status": "ok",
+                "message": "Digest iniciado com sucesso.",
                 "request_id": request_id,
                 "started_at": started_at,
                 "services": services,
                 "execution": {
                     "mode": "async",
-                    "accepted": False,
+                    "accepted": True,
                 },
             },
-            status_code=500,
+            status_code=200,
         )
-
-    run_store.create_job(request_id, started_at, services)
-    thread = Thread(
-        target=_execute_digest_job,
-        args=(request_id, services),
-        daemon=True,
-    )
-    thread.start()
-
-    return JSONResponse(
-        {
-            "status": "ok",
-            "message": "Digest iniciado com sucesso.",
-            "request_id": request_id,
-            "started_at": started_at,
-            "services": services,
-            "execution": {
-                "mode": "async",
-                "accepted": True,
-            },
-        },
-        status_code=200,
-    )
+    except Exception as exc:
+        logger.exception("Erro inesperado e nao tratado durante a inicializacao do run_digest!")
+        return JSONResponse(
+            {"status": "error", "message": "Erro interno no servidor."},
+            status_code=500
+        )
 
 
 @app.get("/runs/{request_id}")
@@ -142,6 +155,11 @@ def _execute_digest_job(
         )
         services = _apply_execution_errors(initial_services, result.output)
         finished_at = datetime.now().astimezone().isoformat()
+        
+        if not result.success:
+            logger.error(f"[{request_id}] Digest finalizado com erros.")
+        else:
+            logger.info(f"[{request_id}] Digest finalizado com sucesso.")
         message = (
             "Digest finalizado com sucesso."
             if result.success

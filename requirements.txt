@@ -2,3 +2,4 @@ google-api-python-client==2.169.0
 google-auth-oauthlib==1.2.2
 fastapi==0.116.1
 uvicorn==0.35.0
+loguru==0.7.3

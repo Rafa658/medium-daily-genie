@@ -44,8 +44,9 @@ class DigestExecutionService:
         with redirect_stdout(buffer):
             try:
                 report = self._report_service.build_report()
-                print(report.markdown)
+                print("Relatorio gerado com sucesso. Enviando por email...")
                 self._sender_service.send_report(report.markdown, report.html)
+                print("Email enviado com sucesso.")
             except RuntimeError as exc:
                 success = False
                 print(f"Erro ao executar o prototipo:\n{exc}")
